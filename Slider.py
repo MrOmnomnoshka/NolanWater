@@ -37,7 +37,8 @@ class Slider:
         pygame.draw.rect(surface, (100, 100, 100), self.rect)
         fill = int((self.value - self.min_val) / (self.max_val - self.min_val) * self.rect.width)
         pygame.draw.rect(surface, (200, 200, 255), (self.rect.x, self.rect.y, fill, self.rect.height))
-        name_surf = font.render(f"{self.name}: {self.value:.3f}", True, (255, 255, 255))
+        val = f"{int(self.value)}" if float(self.value).is_integer() else f"{self.value:.3f}"
+        name_surf = font.render(f"{self.name}: {val}", True, (255, 255, 255))
 
         # handle
         pygame.draw.rect(surface, (250, 100, 100), [fill+20, self.rect.y, 2, 20])
