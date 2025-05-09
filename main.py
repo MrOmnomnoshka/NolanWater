@@ -1,20 +1,27 @@
 import pygame
 import numpy as np
 from Slider import Slider
+import random
+
+# === РАЗДЕЛ НАСТРОЕК ДОЖДЯ ===
+RAIN_ENABLED = True
+RAIN_INTERVAL_MS = 300  # частота появления капель (в миллисекундах)
+RAIN_AMOUNT = 1         # сколько капель за раз
+RAIN_AMPLITUDE = 100.0    # амплитуда капли
+RAIN_RADIUS = 2         # радиус влияния
 
 # Настройки
-GRID_W, GRID_H = 100, 100
-SCALE = 6  # каждый пиксель становится 4×4
+SCREEN_W, SCREEN_H = 600, 600
+SCALE = 2  # каждый пиксель становится X×X
+GRID_W, GRID_H = SCREEN_W // SCALE, SCREEN_H // SCALE
 
 VIS_WIDTH = GRID_W * SCALE
 GUI_WIDTH = 260  # под GUI
 WIDTH, HEIGHT = VIS_WIDTH + GUI_WIDTH, GRID_H * SCALE
 
-
 DAMPING = 0.99               # рассеивание
 AMPLITUDE = 255              # амплитуда при клике
 DIRECTION_FLIP_PROB = 0.01   # шанс смены направления
-SPEED_RANGE = (-0.9, 0.3)     # min/max множители скорости
 
 # Цвета
 BASE_COLOR = (0, 0, 0)              # цвет фона
@@ -42,8 +49,10 @@ class MainApp:
         self.previous_grid = np.zeros((GRID_H, GRID_W), dtype=np.float32)
         self.current_grid = np.zeros((GRID_H, GRID_W), dtype=np.float32)
 
-        # self.speed_map = np.random.uniform(*SPEED_RANGE, size=(GRID_H, GRID_W))
         # self.direction_map = np.random.choice([-1, 1], size=(GRID_H, GRID_W))
+
+        # Таймер последней капли
+        self.last_rain_time = pygame.time.get_ticks()
 
         # Cоздаем слайдеры
         self.init_sliders()
@@ -56,6 +65,9 @@ class MainApp:
             # На лету переделываем перменные от слайдеров
             self.sliders_setters()
 
+            # Генерация капель-дождя
+            self.rain_handler()
+
             # Расчёт следующего состояния
             self.calc_next_state()
 
@@ -64,6 +76,27 @@ class MainApp:
 
             # Отрисовка
             self.draw(surface)
+
+    def rain_handler(self):
+        if RAIN_ENABLED:
+            now = pygame.time.get_ticks()
+            if now - self.last_rain_time >= RAIN_INTERVAL_MS:
+                self.spawn_random_drops()
+                self.last_rain_time = now
+
+    def spawn_random_drops(self):
+        radius = RAIN_RADIUS
+
+        """Создаёт случайные всплески на сетке."""
+        height, width = self.current_grid.shape
+        for _ in range(RAIN_AMOUNT):
+            x = random.randint(radius, width - radius - 1)
+            y = random.randint(radius, height - radius - 1)
+
+            for dy in range(-radius, radius + 1):
+                for dx in range(-radius, radius + 1):
+                    if dx * dx + dy * dy <= radius * radius:
+                        self.current_grid[y + dy, x + dx] += RAIN_AMPLITUDE
 
     def init_pygame(self):
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -74,12 +107,33 @@ class MainApp:
 
     def init_sliders(self):
         self.sliders = [
-            Slider("Damping", 20, 40, 200, 0.800, 1.1, 0.001, DAMPING),
-            Slider("Amplitude", 20, 100, 200, 50, 10000, 1, AMPLITUDE),
+            Slider("Damping", 0, 0, 200, 0.800, 1.1, 0.001, DAMPING),
+            Slider("Amplitude", 0, 0, 200, 50, 10000, 1, AMPLITUDE),
+            Slider("Rain Inter", 0, 0, 200, 1, 1000, 1, RAIN_INTERVAL_MS),
+            Slider("Rain Amount", 0, 0, 200, 0, 20, 1, RAIN_AMOUNT),
+            Slider("Rain Amplitude", 0, 0, 200, 50, 2000, 1, RAIN_AMPLITUDE),
+            Slider("Rain Radius", 0, 0, 200, 1, 20, 1, RAIN_RADIUS),
+
             # Slider("FlipProb", 20, 160, 200, 0.0, 0.1, 0.001, DIRECTION_FLIP_PROB),
-            # Slider("SpeedMin", 20, 220, 200, 0.5, 1.0, 0.01, SPEED_RANGE[0]),
             # Slider("SpeedMax", 20, 280, 200, 1.0, 2.0, 0.01, SPEED_RANGE[1]),
         ]
+        for i in range(len(self.sliders)):
+            self.sliders[i].rect.y = 40 + i * 60 + (40 if i >= 2 else 0)
+            self.sliders[i].rect.x = 20
+
+    def sliders_setters(self):
+        global DAMPING, AMPLITUDE, DIRECTION_FLIP_PROB, RAIN_INTERVAL_MS, RAIN_AMOUNT, RAIN_AMPLITUDE, RAIN_RADIUS
+
+        if Slider.smth_changed:
+            DAMPING = self.sliders[0].value
+            AMPLITUDE = self.sliders[1].value
+            RAIN_INTERVAL_MS = self.sliders[2].value
+            RAIN_AMOUNT = self.sliders[3].value
+            RAIN_AMPLITUDE = self.sliders[4].value
+            RAIN_RADIUS = self.sliders[5].value
+            # DIRECTION_FLIP_PROB = self.sliders[2].value
+
+            Slider.smth_changed = False
 
     def event_filter(self):
         for event in pygame.event.get():
@@ -103,18 +157,6 @@ class MainApp:
                 for slider in self.sliders:
                     slider.dragging = False
 
-    def sliders_setters(self):
-        global DAMPING, AMPLITUDE, DIRECTION_FLIP_PROB, SPEED_RANGE
-
-        if Slider.smth_changed:
-            DAMPING = self.sliders[0].value
-            AMPLITUDE = self.sliders[1].value
-            # DIRECTION_FLIP_PROB = self.sliders[2].value
-            # SPEED_RANGE = (self.sliders[3].value, self.sliders[4].value)
-            # speed_map = np.random.uniform(*SPEED_RANGE, size=(GRID_H, GRID_W))
-
-            Slider.smth_changed = False
-
     def calc_next_state(self):
         avg = (
                       np.roll(self.current_grid, 1, axis=0) + np.roll(self.current_grid, -1, axis=0) +
@@ -123,7 +165,6 @@ class MainApp:
 
         next_state = (avg - self.previous_grid) * DAMPING
 
-        # next_state *= self.speed_map
         # next_state *= self.direction_map
         # next_state *= speed_map * direction_map
 
