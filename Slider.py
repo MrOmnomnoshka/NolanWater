@@ -2,6 +2,8 @@ import pygame
 
 
 class Slider:
+    smth_changed = False
+
     def __init__(self, name, x, y, w, min_val, max_val, step, initial):
         self.name = name
         self.rect = pygame.Rect(x, y, w, 20)
@@ -16,7 +18,11 @@ class Slider:
         rel_x = max(0, min(rel_x, self.rect.width))
         ratio = rel_x / self.rect.width
         raw = self.min_val + ratio * (self.max_val - self.min_val)
-        self.value = round(raw / self.step) * self.step
+        new_value = round(raw / self.step) * self.step
+
+        if new_value != self.value:
+            self.value = new_value
+            Slider.smth_changed = True
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
